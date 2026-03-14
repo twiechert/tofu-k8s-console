@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { PhaseBadge } from '../components/PhaseBadge'
+import { timeAgo } from '../utils'
 
 interface Project {
   name: string
@@ -22,12 +24,36 @@ interface Project {
 
 export function ProjectsPage() {
   const { data, loading } = useApi<Project[]>('/api/v1/projects')
+  const [search, setSearch] = useState('')
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
+  const q = search.toLowerCase()
+  const filtered = q
+    ? data.filter(p => p.name.toLowerCase().includes(q) || p.namespace.toLowerCase().includes(q) || p.spec?.programRef?.name?.toLowerCase().includes(q))
+    : data
+
   return (
     <div>
-      <h1>Projects ({data.length})</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <h1 style={{ marginBottom: 0 }}>Projects ({filtered.length})</h1>
+        <input
+          type="text"
+          placeholder="Search projects..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            borderRadius: '6px',
+            border: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+            color: 'var(--text)',
+            fontSize: '0.85rem',
+            width: '240px',
+            outline: 'none',
+          }}
+        />
+      </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table>
           <thead>
@@ -42,7 +68,7 @@ export function ProjectsPage() {
             </tr>
           </thead>
           <tbody>
-            {data.map(p => (
+            {filtered.map(p => (
               <tr key={`${p.namespace}/${p.name}`}>
                 <td>
                   <Link to={`/projects/${p.namespace}/${p.name}`}>{p.name}</Link>
@@ -52,8 +78,8 @@ export function ProjectsPage() {
                 <td><PhaseBadge phase={p.status?.phase} /></td>
                 <td>{p.status?.revision || 0}</td>
                 <td>{p.status?.driftDetected ? '⚠' : '-'}</td>
-                <td style={{ color: 'var(--text-muted)' }}>
-                  {new Date(p.createdAt).toLocaleDateString()}
+                <td style={{ color: 'var(--text-muted)' }} title={p.createdAt}>
+                  {timeAgo(p.createdAt)}
                 </td>
               </tr>
             ))}

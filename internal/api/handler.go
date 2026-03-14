@@ -28,6 +28,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/overview", h.getOverview)
 	mux.HandleFunc("GET /api/v1/graph", h.getGraph)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/rerun", h.rerunProject)
+	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/suspend", h.suspendProject)
 }
 
 func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
@@ -284,6 +285,29 @@ func (h *Handler) rerunProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]string{"status": "rerun triggered"})
+}
+
+func (h *Handler) suspendProject(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+
+	var body struct {
+		Suspend bool `json:"suspend"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "missing 'suspend' in request body")
+		return
+	}
+
+	if err := h.k8s.SetSuspend(r.Context(), ns, name, body.Suspend); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	action := "resumed"
+	if body.Suspend {
+		action = "suspended"
+	}
+	writeJSON(w, map[string]string{"status": action})
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

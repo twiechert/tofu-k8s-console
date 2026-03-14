@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { PhaseBadge } from '../components/PhaseBadge'
+import { stripAnsi, timeAgo } from '../utils'
 
 interface Project {
   name: string
   namespace: string
   spec: Record<string, unknown> & {
     approval?: { mode?: string }
+    suspend?: boolean
   }
   status: {
     phase: string
@@ -48,23 +50,27 @@ export function ProjectDetailPage() {
   const [expandedRev, setExpandedRev] = useState<number | null>(null)
   const [approving, setApproving] = useState(false)
   const [rerunning, setRerunning] = useState(false)
+  const [suspending, setSuspending] = useState(false)
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
   const s = data.status
   const isGitHubPR = data.spec?.approval?.mode === 'githubPR'
   const canApprove = s.phase === 'WaitingApproval' && s.pendingPlanHash && !isGitHubPR
+  const isSuspended = data.spec?.suspend === true
 
-  const handleAction = async (action: 'approve' | 'rerun') => {
-    const label = action === 'approve' ? 'approve this plan' : 'trigger a rerun'
-    if (!confirm(`Are you sure you want to ${label}?`)) return
-    const setter = action === 'approve' ? setApproving : setRerunning
-    setter(true)
+  const handleAction = async (action: 'approve' | 'rerun' | 'suspend') => {
+    const labels: Record<string, string> = { approve: 'approve this plan', rerun: 'trigger a rerun', suspend: isSuspended ? 'resume this project' : 'suspend this project' }
+    if (!confirm(`Are you sure you want to ${labels[action]}?`)) return
+    const setters: Record<string, (v: boolean) => void> = { approve: setApproving, rerun: setRerunning, suspend: setSuspending }
+    setters[action](true)
     try {
       const url = `/api/v1/projects/${namespace}/${name}/${action}`
       const opts: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' } }
       if (action === 'approve') {
         opts.body = JSON.stringify({ hash: s.pendingPlanHash })
+      } else if (action === 'suspend') {
+        opts.body = JSON.stringify({ suspend: !isSuspended })
       }
       const res = await fetch(url, opts)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -72,11 +78,11 @@ export function ProjectDetailPage() {
     } catch (e) {
       alert(`${action} failed: ${e}`)
     } finally {
-      setter(false)
+      setters[action](false)
     }
   }
 
-  const actionButton = (label: string, action: 'approve' | 'rerun', color: string, busy: boolean) => (
+  const actionButton = (label: string, action: 'approve' | 'rerun' | 'suspend', color: string, busy: boolean) => (
     <button
       onClick={() => handleAction(action)}
       disabled={busy}
@@ -103,6 +109,7 @@ export function ProjectDetailPage() {
         <div style={{ display: 'flex', gap: '8px' }}>
           {canApprove && actionButton('Approve Plan', 'approve', 'var(--success)', approving)}
           {actionButton('Rerun', 'rerun', 'var(--info)', rerunning)}
+          {actionButton(isSuspended ? 'Resume' : 'Suspend', 'suspend', isSuspended ? 'var(--success)' : 'var(--warning)', suspending)}
         </div>
       </div>
 
@@ -187,7 +194,7 @@ export function ProjectDetailPage() {
           {s.planOutput && (
             <div className="card">
               <h2>Plan Output</h2>
-              <pre>{s.planOutput}</pre>
+              <pre>{stripAnsi(s.planOutput)}</pre>
             </div>
           )}
         </>
@@ -227,7 +234,7 @@ export function ProjectDetailPage() {
                       <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{rev.jobName}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{rev.appliedHash.slice(0, 8)}</td>
                       <td style={{ color: 'var(--text-muted)' }}>
-                        {new Date(rev.timestamp).toLocaleString()}
+                        <span title={rev.timestamp}>{timeAgo(rev.timestamp)}</span>
                       </td>
                     </tr>
                     {expandedRev === rev.revision && (
@@ -253,7 +260,7 @@ export function ProjectDetailPage() {
                           {rev.planOutput && (
                             <div>
                               <h2>Plan Output</h2>
-                              <pre>{rev.planOutput}</pre>
+                              <pre>{stripAnsi(rev.planOutput)}</pre>
                             </div>
                           )}
                           {!rev.planOutput && !rev.snapshot && (

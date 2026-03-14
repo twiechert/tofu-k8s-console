@@ -158,6 +158,16 @@ func (c *Client) ApproveProject(ctx context.Context, namespace, name, hash strin
 	return nil
 }
 
+// SetSuspend sets or clears the suspend field on a TofuProject.
+func (c *Client) SetSuspend(ctx context.Context, namespace, name string, suspend bool) error {
+	patch := fmt.Sprintf(`{"spec":{"suspend":%t}}`, suspend)
+	_, err := c.dyn.Resource(projectGVR).Namespace(namespace).Patch(ctx, name, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("setting suspend on TofuProject %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
 // RerunProject forces a re-reconcile by adding/updating a rerun annotation with the current timestamp.
 func (c *Client) RerunProject(ctx context.Context, namespace, name string) error {
 	timestamp := fmt.Sprintf("%d", metav1.Now().Unix())

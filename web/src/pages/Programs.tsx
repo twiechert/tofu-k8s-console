@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { useApi } from '../hooks/useApi'
+import { timeAgo } from '../utils'
 
 interface Program {
   name: string
@@ -13,12 +15,36 @@ interface Program {
 
 export function ProgramsPage() {
   const { data, loading } = useApi<Program[]>('/api/v1/programs')
+  const [search, setSearch] = useState('')
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
+  const q = search.toLowerCase()
+  const filtered = q
+    ? data.filter(p => p.name.toLowerCase().includes(q) || p.namespace.toLowerCase().includes(q))
+    : data
+
   return (
     <div>
-      <h1>Programs ({data.length})</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <h1 style={{ marginBottom: 0 }}>Programs ({filtered.length})</h1>
+        <input
+          type="text"
+          placeholder="Search programs..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            padding: '8px 12px',
+            borderRadius: '6px',
+            border: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+            color: 'var(--text)',
+            fontSize: '0.85rem',
+            width: '240px',
+            outline: 'none',
+          }}
+        />
+      </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table>
           <thead>
@@ -31,7 +57,7 @@ export function ProgramsPage() {
             </tr>
           </thead>
           <tbody>
-            {data.map(p => (
+            {filtered.map(p => (
               <tr key={`${p.namespace}/${p.name}`}>
                 <td>{p.name}</td>
                 <td style={{ color: 'var(--text-muted)' }}>{p.namespace}</td>
@@ -44,8 +70,8 @@ export function ProgramsPage() {
                 <td>
                   {p.spec?.providers?.map(pr => pr.name).join(', ') || '-'}
                 </td>
-                <td style={{ color: 'var(--text-muted)' }}>
-                  {new Date(p.createdAt).toLocaleDateString()}
+                <td style={{ color: 'var(--text-muted)' }} title={p.createdAt}>
+                  {timeAgo(p.createdAt)}
                 </td>
               </tr>
             ))}
