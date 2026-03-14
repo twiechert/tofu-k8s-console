@@ -1,0 +1,34 @@
+# Binaries
+bin/
+
+# Build output
+*.out
+*.exe
+*.test
+
+# Dependency directories
+vendor/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Go modules
+# /go.sum — tracked; needed by CI
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Kubernetes config
+*.kubeconfig
+
+# Ignore local env files
+.env
+.env.*
+
+# Frontend
+web/node_modules/
+web/dist/
