@@ -47,6 +47,7 @@ export function ProjectDetailPage() {
   const [tab, setTab] = useState<Tab>('overview')
   const [expandedRev, setExpandedRev] = useState<number | null>(null)
   const [approving, setApproving] = useState(false)
+  const [rerunning, setRerunning] = useState(false)
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
@@ -54,47 +55,55 @@ export function ProjectDetailPage() {
   const isGitHubPR = data.spec?.approval?.mode === 'githubPR'
   const canApprove = s.phase === 'WaitingApproval' && s.pendingPlanHash && !isGitHubPR
 
-  const handleApprove = async () => {
-    if (!confirm('Are you sure you want to approve this plan?')) return
-    setApproving(true)
+  const handleAction = async (action: 'approve' | 'rerun') => {
+    const label = action === 'approve' ? 'approve this plan' : 'trigger a rerun'
+    if (!confirm(`Are you sure you want to ${label}?`)) return
+    const setter = action === 'approve' ? setApproving : setRerunning
+    setter(true)
     try {
-      const res = await fetch(`/api/v1/projects/${namespace}/${name}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hash: s.pendingPlanHash }),
-      })
+      const url = `/api/v1/projects/${namespace}/${name}/${action}`
+      const opts: RequestInit = { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+      if (action === 'approve') {
+        opts.body = JSON.stringify({ hash: s.pendingPlanHash })
+      }
+      const res = await fetch(url, opts)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       window.location.reload()
     } catch (e) {
-      alert(`Approve failed: ${e}`)
+      alert(`${action} failed: ${e}`)
     } finally {
-      setApproving(false)
+      setter(false)
     }
   }
+
+  const actionButton = (label: string, action: 'approve' | 'rerun', color: string, busy: boolean) => (
+    <button
+      onClick={() => handleAction(action)}
+      disabled={busy}
+      style={{
+        padding: '8px 20px',
+        borderRadius: '6px',
+        border: 'none',
+        cursor: busy ? 'not-allowed' : 'pointer',
+        background: color,
+        color: '#fff',
+        fontWeight: 600,
+        fontSize: '0.9rem',
+        opacity: busy ? 0.6 : 1,
+      }}
+    >
+      {busy ? label.replace(/^/, '') + '...' : label}
+    </button>
+  )
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <h1 style={{ marginBottom: 0 }}>{data.namespace}/{data.name}</h1>
-        {canApprove && (
-          <button
-            onClick={handleApprove}
-            disabled={approving}
-            style={{
-              padding: '8px 20px',
-              borderRadius: '6px',
-              border: 'none',
-              cursor: approving ? 'not-allowed' : 'pointer',
-              background: 'var(--success)',
-              color: '#fff',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              opacity: approving ? 0.6 : 1,
-            }}
-          >
-            {approving ? 'Approving...' : 'Approve Plan'}
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {canApprove && actionButton('Approve Plan', 'approve', 'var(--success)', approving)}
+          {actionButton('Rerun', 'rerun', 'var(--info)', rerunning)}
+        </div>
       </div>
 
       <div className="grid grid-4" style={{ marginBottom: '24px' }}>

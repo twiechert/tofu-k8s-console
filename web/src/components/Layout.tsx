@@ -29,6 +29,7 @@ export function Layout() {
             Dashboard
           </div>
           <NavLink to="/" end style={({ isActive }) => linkStyle(isActive)}>Overview</NavLink>
+          <NavLink to="/graph" style={({ isActive }) => linkStyle(isActive)}>Stack Graph</NavLink>
         </div>
 
         <div style={{ marginBottom: '20px' }}>

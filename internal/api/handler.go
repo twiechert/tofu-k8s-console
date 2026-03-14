@@ -26,6 +26,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/revisions", h.listRevisions)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/approve", h.approveProject)
 	mux.HandleFunc("GET /api/v1/overview", h.getOverview)
+	mux.HandleFunc("GET /api/v1/graph", h.getGraph)
+	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/rerun", h.rerunProject)
 }
 
 func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
@@ -158,6 +160,130 @@ func (h *Handler) getOverview(w http.ResponseWriter, r *http.Request) {
 		ErrorCount:     errorCount,
 		Namespaces:     namespaces,
 	})
+}
+
+// GraphNode represents a node in the dependency graph.
+type GraphNode struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Type      string `json:"type"` // "project" or "program"
+	Namespace string `json:"namespace"`
+	Phase     string `json:"phase,omitempty"`
+}
+
+// GraphEdge represents an edge between nodes.
+type GraphEdge struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Label  string `json:"label,omitempty"` // e.g. "programRef" or output mapping
+}
+
+// Graph holds nodes and edges for visualization.
+type Graph struct {
+	Nodes []GraphNode `json:"nodes"`
+	Edges []GraphEdge `json:"edges"`
+}
+
+func (h *Handler) getGraph(w http.ResponseWriter, r *http.Request) {
+	projects, err := h.k8s.ListProjects(r.Context(), "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	programs, err := h.k8s.ListPrograms(r.Context(), "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	var nodes []GraphNode
+	var edges []GraphEdge
+
+	// Add program nodes
+	for _, prog := range programs {
+		nodes = append(nodes, GraphNode{
+			ID:        "program:" + prog.Namespace + "/" + prog.Name,
+			Label:     prog.Name,
+			Type:      "program",
+			Namespace: prog.Namespace,
+		})
+	}
+
+	// Add project nodes and edges
+	for _, proj := range projects {
+		var status struct {
+			Phase string `json:"phase"`
+		}
+		_ = json.Unmarshal(proj.Status, &status)
+
+		var spec struct {
+			ProgramRef struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace,omitempty"`
+			} `json:"programRef"`
+			Dependencies []struct {
+				ProjectRef struct {
+					Name      string `json:"name"`
+					Namespace string `json:"namespace,omitempty"`
+				} `json:"projectRef"`
+				Outputs map[string]string `json:"outputs"`
+			} `json:"dependencies"`
+		}
+		_ = json.Unmarshal(proj.Spec, &spec)
+
+		projID := "project:" + proj.Namespace + "/" + proj.Name
+		nodes = append(nodes, GraphNode{
+			ID:        projID,
+			Label:     proj.Name,
+			Type:      "project",
+			Namespace: proj.Namespace,
+			Phase:     status.Phase,
+		})
+
+		// Edge: project -> program
+		progNS := spec.ProgramRef.Namespace
+		if progNS == "" {
+			progNS = proj.Namespace
+		}
+		edges = append(edges, GraphEdge{
+			Source: projID,
+			Target: "program:" + progNS + "/" + spec.ProgramRef.Name,
+			Label:  "programRef",
+		})
+
+		// Edges: project -> dependency projects
+		for _, dep := range spec.Dependencies {
+			depNS := dep.ProjectRef.Namespace
+			if depNS == "" {
+				depNS = proj.Namespace
+			}
+			label := ""
+			for k, v := range dep.Outputs {
+				if label != "" {
+					label += ", "
+				}
+				label += k + " -> " + v
+			}
+			edges = append(edges, GraphEdge{
+				Source: "project:" + depNS + "/" + dep.ProjectRef.Name,
+				Target: projID,
+				Label:  label,
+			})
+		}
+	}
+
+	writeJSON(w, Graph{Nodes: nodes, Edges: edges})
+}
+
+func (h *Handler) rerunProject(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+
+	if err := h.k8s.RerunProject(r.Context(), ns, name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "rerun triggered"})
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

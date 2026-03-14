@@ -158,6 +158,17 @@ func (c *Client) ApproveProject(ctx context.Context, namespace, name, hash strin
 	return nil
 }
 
+// RerunProject forces a re-reconcile by adding/updating a rerun annotation with the current timestamp.
+func (c *Client) RerunProject(ctx context.Context, namespace, name string) error {
+	timestamp := fmt.Sprintf("%d", metav1.Now().Unix())
+	patch := fmt.Sprintf(`{"metadata":{"annotations":{"tofu.example.com/rerun":"%s"}}}`, timestamp)
+	_, err := c.dyn.Resource(projectGVR).Namespace(namespace).Patch(ctx, name, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("triggering rerun for TofuProject %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
 // Revision represents a stored revision ConfigMap.
 type Revision struct {
 	Revision    int               `json:"revision"`
