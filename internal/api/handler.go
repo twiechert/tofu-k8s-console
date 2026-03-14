@@ -23,6 +23,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}", h.getProject)
 	mux.HandleFunc("GET /api/v1/programs", h.listPrograms)
 	mux.HandleFunc("GET /api/v1/programs/{namespace}/{name}", h.getProgram)
+	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/revisions", h.listRevisions)
+	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/approve", h.approveProject)
 	mux.HandleFunc("GET /api/v1/overview", h.getOverview)
 }
 
@@ -45,6 +47,36 @@ func (h *Handler) getProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, project)
+}
+
+func (h *Handler) approveProject(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+
+	var body struct {
+		Hash string `json:"hash"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Hash == "" {
+		writeError(w, http.StatusBadRequest, "missing 'hash' in request body")
+		return
+	}
+
+	if err := h.k8s.ApproveProject(r.Context(), ns, name, body.Hash); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "approved"})
+}
+
+func (h *Handler) listRevisions(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+	revisions, err := h.k8s.ListRevisions(r.Context(), ns, name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, revisions)
 }
 
 func (h *Handler) listPrograms(w http.ResponseWriter, r *http.Request) {

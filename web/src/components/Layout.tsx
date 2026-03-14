@@ -1,34 +1,50 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
-const navStyle = (isActive: boolean) => ({
+const linkStyle = (isActive: boolean) => ({
+  display: 'block',
   padding: '8px 16px',
   borderRadius: '6px',
   color: isActive ? 'var(--accent)' : 'var(--text-muted)',
   background: isActive ? 'rgba(20, 184, 166, 0.1)' : 'transparent',
   fontWeight: isActive ? 600 : 400,
+  fontSize: '0.9rem',
 })
 
 export function Layout() {
   return (
-    <div>
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
       <nav style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '12px 24px',
-        borderBottom: '1px solid var(--border)',
+        width: '220px',
+        borderRight: '1px solid var(--border)',
         background: 'var(--bg-card)',
+        padding: '16px 12px',
+        flexShrink: 0,
       }}>
-        <span style={{ fontWeight: 700, fontSize: '1.1rem', marginRight: '24px' }}>
+        <div style={{ fontWeight: 700, fontSize: '1rem', padding: '8px 16px', marginBottom: '20px' }}>
           tofu-k8s-console
-        </span>
-        <NavLink to="/" end style={({ isActive }) => navStyle(isActive)}>Overview</NavLink>
-        <NavLink to="/projects" style={({ isActive }) => navStyle(isActive)}>Projects</NavLink>
-        <NavLink to="/programs" style={({ isActive }) => navStyle(isActive)}>Programs</NavLink>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ padding: '4px 16px', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            Dashboard
+          </div>
+          <NavLink to="/" end style={({ isActive }) => linkStyle(isActive)}>Overview</NavLink>
+        </div>
+
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ padding: '4px 16px', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: '4px' }}>
+            Resources
+          </div>
+          <NavLink to="/projects" style={({ isActive }) => linkStyle(isActive)}>Projects</NavLink>
+          <NavLink to="/programs" style={({ isActive }) => linkStyle(isActive)}>Programs</NavLink>
+        </div>
       </nav>
-      <div className="container">
-        <Outlet />
-      </div>
+
+      <main style={{ flex: 1, overflow: 'auto' }}>
+        <div className="container">
+          <Outlet />
+        </div>
+      </main>
     </div>
   )
 }

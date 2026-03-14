@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -26,9 +30,10 @@ var (
 	}
 )
 
-// Client wraps a dynamic Kubernetes client for tofu CRDs.
+// Client wraps Kubernetes clients for tofu CRDs and core resources.
 type Client struct {
-	dyn dynamic.Interface
+	dyn       dynamic.Interface
+	clientset kubernetes.Interface
 }
 
 // NewClient creates a Client using in-cluster config or kubeconfig fallback.
@@ -55,7 +60,12 @@ func NewClient(kubeconfig string) (*Client, error) {
 		return nil, fmt.Errorf("creating dynamic client: %w", err)
 	}
 
-	return &Client{dyn: dyn}, nil
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating clientset: %w", err)
+	}
+
+	return &Client{dyn: dyn, clientset: clientset}, nil
 }
 
 // TofuProject represents a TofuProject resource.
@@ -136,6 +146,72 @@ func (c *Client) GetProgram(ctx context.Context, namespace, name string) (*TofuP
 	}
 	p := toProgram(*item)
 	return &p, nil
+}
+
+// ApproveProject sets the approved-hash annotation on a TofuProject to trigger apply.
+func (c *Client) ApproveProject(ctx context.Context, namespace, name, hash string) error {
+	patch := fmt.Sprintf(`{"metadata":{"annotations":{"tofu.example.com/approved-hash":"%s"}}}`, hash)
+	_, err := c.dyn.Resource(projectGVR).Namespace(namespace).Patch(ctx, name, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
+	if err != nil {
+		return fmt.Errorf("approving TofuProject %s/%s: %w", namespace, name, err)
+	}
+	return nil
+}
+
+// Revision represents a stored revision ConfigMap.
+type Revision struct {
+	Revision    int               `json:"revision"`
+	AppliedHash string            `json:"appliedHash"`
+	JobName     string            `json:"jobName"`
+	Timestamp   string            `json:"timestamp"`
+	Status      string            `json:"status"`
+	PlanSummary string            `json:"planSummary"`
+	PlanOutput  string            `json:"planOutput,omitempty"`
+	Outputs     json.RawMessage   `json:"outputs,omitempty"`
+	Snapshot    map[string]string `json:"snapshot,omitempty"`
+}
+
+// ListRevisions returns all revision ConfigMaps for a given project, sorted by revision number descending.
+func (c *Client) ListRevisions(ctx context.Context, namespace, projectName string) ([]Revision, error) {
+	cmList, err := c.clientset.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("tofu.example.com/project=%s,tofu.example.com/resource-type=revision", projectName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("listing revision ConfigMaps: %w", err)
+	}
+
+	revisions := make([]Revision, 0, len(cmList.Items))
+	for _, cm := range cmList.Items {
+		rev := Revision{
+			AppliedHash: cm.Data["appliedHash"],
+			JobName:     cm.Data["jobName"],
+			Timestamp:   cm.Data["timestamp"],
+			Status:      cm.Data["status"],
+			PlanSummary: cm.Data["planSummary"],
+			PlanOutput:  cm.Data["planOutput"],
+			Outputs:     json.RawMessage(cm.Data["outputs"]),
+		}
+		rev.Revision, _ = strconv.Atoi(cm.Data["revision"])
+
+		// Extract snapshot files (prefixed with "snapshot:")
+		snapshot := map[string]string{}
+		for k, v := range cm.Data {
+			if len(k) > 9 && k[:9] == "snapshot:" {
+				snapshot[k[9:]] = v
+			}
+		}
+		if len(snapshot) > 0 {
+			rev.Snapshot = snapshot
+		}
+
+		revisions = append(revisions, rev)
+	}
+
+	sort.Slice(revisions, func(i, j int) bool {
+		return revisions[i].Revision > revisions[j].Revision
+	})
+
+	return revisions, nil
 }
 
 func toProject(u unstructured.Unstructured) TofuProject {

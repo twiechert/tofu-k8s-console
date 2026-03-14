@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { PhaseBadge } from '../components/PhaseBadge'
@@ -5,7 +6,9 @@ import { PhaseBadge } from '../components/PhaseBadge'
 interface Project {
   name: string
   namespace: string
-  spec: Record<string, unknown>
+  spec: Record<string, unknown> & {
+    approval?: { mode?: string }
+  }
   status: {
     phase: string
     message: string
@@ -23,17 +26,76 @@ interface Project {
   createdAt: string
 }
 
+interface Revision {
+  revision: number
+  appliedHash: string
+  jobName: string
+  timestamp: string
+  status: string
+  planSummary: string
+  planOutput?: string
+  outputs?: Record<string, string>
+  snapshot?: Record<string, string>
+}
+
+type Tab = 'overview' | 'revisions' | 'spec'
+
 export function ProjectDetailPage() {
   const { namespace, name } = useParams()
   const { data, loading } = useApi<Project>(`/api/v1/projects/${namespace}/${name}`)
+  const { data: revisions } = useApi<Revision[]>(`/api/v1/projects/${namespace}/${name}/revisions`)
+  const [tab, setTab] = useState<Tab>('overview')
+  const [expandedRev, setExpandedRev] = useState<number | null>(null)
+  const [approving, setApproving] = useState(false)
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
   const s = data.status
+  const isGitHubPR = data.spec?.approval?.mode === 'githubPR'
+  const canApprove = s.phase === 'WaitingApproval' && s.pendingPlanHash && !isGitHubPR
+
+  const handleApprove = async () => {
+    if (!confirm('Are you sure you want to approve this plan?')) return
+    setApproving(true)
+    try {
+      const res = await fetch(`/api/v1/projects/${namespace}/${name}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash: s.pendingPlanHash }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      window.location.reload()
+    } catch (e) {
+      alert(`Approve failed: ${e}`)
+    } finally {
+      setApproving(false)
+    }
+  }
 
   return (
     <div>
-      <h1>{data.namespace}/{data.name}</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <h1 style={{ marginBottom: 0 }}>{data.namespace}/{data.name}</h1>
+        {canApprove && (
+          <button
+            onClick={handleApprove}
+            disabled={approving}
+            style={{
+              padding: '8px 20px',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: approving ? 'not-allowed' : 'pointer',
+              background: 'var(--success)',
+              color: '#fff',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              opacity: approving ? 0.6 : 1,
+            }}
+          >
+            {approving ? 'Approving...' : 'Approve Plan'}
+          </button>
+        )}
+      </div>
 
       <div className="grid grid-4" style={{ marginBottom: '24px' }}>
         <div className="card">
@@ -62,45 +124,149 @@ export function ProjectDetailPage() {
         )}
       </div>
 
-      {s.message && (
-        <div className="card" style={{ marginBottom: '16px' }}>
-          <h2>Message</h2>
-          <p>{s.message}</p>
-        </div>
-      )}
-
-      {s.pendingPRURL && (
-        <div className="card" style={{ marginBottom: '16px' }}>
-          <h2>Pending Approval</h2>
-          <a href={s.pendingPRURL} target="_blank" rel="noopener noreferrer">{s.pendingPRURL}</a>
-        </div>
-      )}
-
-      {s.outputs && Object.keys(s.outputs).length > 0 && (
-        <div className="card" style={{ marginBottom: '16px' }}>
-          <h2>Outputs</h2>
-          <table>
-            <thead><tr><th>Key</th><th>Value</th></tr></thead>
-            <tbody>
-              {Object.entries(s.outputs).map(([k, v]) => (
-                <tr key={k}><td>{k}</td><td><code>{v}</code></td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {s.planOutput && (
-        <div className="card" style={{ marginBottom: '16px' }}>
-          <h2>Plan Output</h2>
-          <pre>{s.planOutput}</pre>
-        </div>
-      )}
-
-      <div className="card">
-        <h2>Spec</h2>
-        <pre>{JSON.stringify(data.spec, null, 2)}</pre>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
+        {(['overview', 'revisions', 'spec'] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              background: tab === t ? 'rgba(20, 184, 166, 0.15)' : 'var(--bg-card)',
+              color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
+              fontWeight: tab === t ? 600 : 400,
+              textTransform: 'capitalize',
+            }}
+          >
+            {t}{t === 'revisions' && revisions ? ` (${revisions.length})` : ''}
+          </button>
+        ))}
       </div>
+
+      {tab === 'overview' && (
+        <>
+          {s.message && (
+            <div className="card" style={{ marginBottom: '16px' }}>
+              <h2>Message</h2>
+              <p>{s.message}</p>
+            </div>
+          )}
+
+          {s.pendingPRURL && (
+            <div className="card" style={{ marginBottom: '16px' }}>
+              <h2>Pending Approval</h2>
+              <a href={s.pendingPRURL} target="_blank" rel="noopener noreferrer">{s.pendingPRURL}</a>
+            </div>
+          )}
+
+          {s.outputs && Object.keys(s.outputs).length > 0 && (
+            <div className="card" style={{ marginBottom: '16px' }}>
+              <h2>Outputs</h2>
+              <table>
+                <thead><tr><th>Key</th><th>Value</th></tr></thead>
+                <tbody>
+                  {Object.entries(s.outputs).map(([k, v]) => (
+                    <tr key={k}><td>{k}</td><td><code>{v}</code></td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {s.planOutput && (
+            <div className="card">
+              <h2>Plan Output</h2>
+              <pre>{s.planOutput}</pre>
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'revisions' && (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          {!revisions || revisions.length === 0 ? (
+            <div className="loading">No revisions found</div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Rev</th>
+                  <th>Status</th>
+                  <th>Summary</th>
+                  <th>Job</th>
+                  <th>Hash</th>
+                  <th>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {revisions.map(rev => (
+                  <>
+                    <tr
+                      key={rev.revision}
+                      onClick={() => setExpandedRev(expandedRev === rev.revision ? null : rev.revision)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td style={{ fontWeight: 600 }}>#{rev.revision}</td>
+                      <td>
+                        <span className={`badge ${rev.status === 'succeeded' ? 'badge-success' : 'badge-error'}`}>
+                          {rev.status}
+                        </span>
+                      </td>
+                      <td>{rev.planSummary || '-'}</td>
+                      <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{rev.jobName}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{rev.appliedHash.slice(0, 8)}</td>
+                      <td style={{ color: 'var(--text-muted)' }}>
+                        {new Date(rev.timestamp).toLocaleString()}
+                      </td>
+                    </tr>
+                    {expandedRev === rev.revision && (
+                      <tr key={`${rev.revision}-detail`}>
+                        <td colSpan={6} style={{ padding: '16px', background: 'var(--bg)' }}>
+                          {rev.outputs && Object.keys(JSON.parse(typeof rev.outputs === 'string' ? rev.outputs : JSON.stringify(rev.outputs))).length > 0 && (
+                            <div style={{ marginBottom: '12px' }}>
+                              <h2>Outputs</h2>
+                              <pre>{typeof rev.outputs === 'string' ? rev.outputs : JSON.stringify(rev.outputs, null, 2)}</pre>
+                            </div>
+                          )}
+                          {rev.snapshot && Object.keys(rev.snapshot).length > 0 && (
+                            <div style={{ marginBottom: '12px' }}>
+                              <h2>Snapshot Files</h2>
+                              {Object.entries(rev.snapshot).map(([file, content]) => (
+                                <div key={file} style={{ marginBottom: '8px' }}>
+                                  <div style={{ color: 'var(--accent)', fontSize: '0.85rem', marginBottom: '4px' }}>{file}</div>
+                                  <pre>{content}</pre>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {rev.planOutput && (
+                            <div>
+                              <h2>Plan Output</h2>
+                              <pre>{rev.planOutput}</pre>
+                            </div>
+                          )}
+                          {!rev.planOutput && !rev.snapshot && (
+                            <span style={{ color: 'var(--text-muted)' }}>No detailed data stored for this revision.</span>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {tab === 'spec' && (
+        <div className="card">
+          <h2>Spec</h2>
+          <pre>{JSON.stringify(data.spec, null, 2)}</pre>
+        </div>
+      )}
     </div>
   )
 }
