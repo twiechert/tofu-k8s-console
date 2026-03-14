@@ -29,6 +29,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/graph", h.getGraph)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/rerun", h.rerunProject)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/suspend", h.suspendProject)
+	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/resources", h.listResources)
 }
 
 func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
@@ -285,6 +286,35 @@ func (h *Handler) rerunProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]string{"status": "rerun triggered"})
+}
+
+func (h *Handler) listResources(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+
+	// Get plan output from project status
+	project, err := h.k8s.GetProject(r.Context(), ns, name)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	var status struct {
+		PlanOutput string `json:"planOutput"`
+	}
+	_ = json.Unmarshal(project.Status, &status)
+
+	// Also check latest revision for richer data
+	planText := status.PlanOutput
+	if planText == "" {
+		revisions, err := h.k8s.ListRevisions(r.Context(), ns, name)
+		if err == nil && len(revisions) > 0 {
+			planText = revisions[0].PlanOutput
+		}
+	}
+
+	resources := k8s.ParseResources(planText)
+	writeJSON(w, resources)
 }
 
 func (h *Handler) suspendProject(w http.ResponseWriter, r *http.Request) {

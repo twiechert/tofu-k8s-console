@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { PhaseBadge } from '../components/PhaseBadge'
 import { stripAnsi, timeAgo } from '../utils'
+import { ResourceTable } from './Resources'
+import type { Resource } from './Resources'
 
 interface Project {
   name: string
@@ -40,12 +42,13 @@ interface Revision {
   snapshot?: Record<string, string>
 }
 
-type Tab = 'overview' | 'revisions' | 'spec'
+type Tab = 'overview' | 'resources' | 'revisions' | 'spec'
 
 export function ProjectDetailPage() {
   const { namespace, name } = useParams()
   const { data, loading } = useApi<Project>(`/api/v1/projects/${namespace}/${name}`)
   const { data: revisions } = useApi<Revision[]>(`/api/v1/projects/${namespace}/${name}/revisions`)
+  const { data: resources } = useApi<Resource[]>(`/api/v1/projects/${namespace}/${name}/resources`)
   const [tab, setTab] = useState<Tab>('overview')
   const [expandedRev, setExpandedRev] = useState<number | null>(null)
   const [approving, setApproving] = useState(false)
@@ -141,7 +144,7 @@ export function ProjectDetailPage() {
       </div>
 
       <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
-        {(['overview', 'revisions', 'spec'] as Tab[]).map(t => (
+        {(['overview', 'resources', 'revisions', 'spec'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -156,7 +159,7 @@ export function ProjectDetailPage() {
               textTransform: 'capitalize',
             }}
           >
-            {t}{t === 'revisions' && revisions ? ` (${revisions.length})` : ''}
+            {t}{t === 'revisions' && revisions ? ` (${revisions.length})` : ''}{t === 'resources' && resources ? ` (${resources.length})` : ''}
           </button>
         ))}
       </div>
@@ -198,6 +201,10 @@ export function ProjectDetailPage() {
             </div>
           )}
         </>
+      )}
+
+      {tab === 'resources' && (
+        <ResourceTable resources={resources || []} />
       )}
 
       {tab === 'revisions' && (
