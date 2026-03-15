@@ -38,8 +38,9 @@ export function Layout() {
         display: 'flex',
         flexDirection: 'column',
       }}>
-        <div style={{ fontWeight: 700, fontSize: '1rem', padding: '8px 16px', marginBottom: '20px' }}>
-          tofu-k8s-console
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 16px', marginBottom: '20px' }}>
+          <img src="/logo.png" alt="logo" style={{ width: 28, height: 28 }} />
+          <span style={{ fontWeight: 700, fontSize: '1rem' }}>Console</span>
         </div>
 
         <div style={{ marginBottom: '20px' }}>
