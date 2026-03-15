@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { timeAgo } from '../utils'
 
@@ -65,7 +65,7 @@ export function ProgramsPage() {
           <tbody>
             {filtered.map(p => (
               <tr key={`${p.namespace}/${p.name}`}>
-                <td>{p.name}</td>
+                <td><Link to={`/programs/${p.namespace}/${p.name}`}>{p.name}</Link></td>
                 <td style={{ color: 'var(--text-muted)' }}>{p.namespace}</td>
                 <td>
                   {p.spec?.source

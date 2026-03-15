@@ -73,6 +73,11 @@ func NewClient(kubeconfig string) (*Client, error) {
 	return &Client{dyn: dyn, clientset: clientset}, nil
 }
 
+// Clientset returns the underlying kubernetes clientset.
+func (c *Client) Clientset() kubernetes.Interface {
+	return c.clientset
+}
+
 // TofuProject represents a TofuProject resource.
 type TofuProject struct {
 	Name      string            `json:"name"`

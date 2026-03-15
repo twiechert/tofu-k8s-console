@@ -1,10 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/twiechert/tofu-k8s-console/internal/auth"
+	gitpkg "github.com/twiechert/tofu-k8s-console/internal/git"
 	"github.com/twiechert/tofu-k8s-console/internal/k8s"
 	"github.com/twiechert/tofu-k8s-console/internal/middleware"
 )
@@ -12,11 +15,12 @@ import (
 // Handler provides HTTP handlers for the API.
 type Handler struct {
 	k8s *k8s.Client
+	git *gitpkg.Registry
 }
 
 // NewHandler creates a new API handler.
-func NewHandler(k8sClient *k8s.Client) *Handler {
-	return &Handler{k8s: k8sClient}
+func NewHandler(k8sClient *k8s.Client, gitRegistry *gitpkg.Registry) *Handler {
+	return &Handler{k8s: k8sClient, git: gitRegistry}
 }
 
 // wrap applies role-based middleware to a handler func.
@@ -40,6 +44,10 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/jobs/{namespace}/{name}/logs", wrap(auth.RoleViewer, h.getJobLogs))
 	mux.Handle("GET /api/v1/overview", wrap(auth.RoleViewer, h.getOverview))
 	mux.Handle("GET /api/v1/graph", wrap(auth.RoleViewer, h.getGraph))
+
+	// Git integration
+	mux.Handle("GET /api/v1/programs/{namespace}/{name}/commits", wrap(auth.RoleViewer, h.listProgramCommits))
+	mux.Handle("GET /api/v1/programs/{namespace}/{name}/commits/{sha}", wrap(auth.RoleViewer, h.getProgramCommit))
 
 	// Operate (operator)
 	mux.Handle("POST /api/v1/projects/{namespace}/{name}/approve", wrap(auth.RoleOperator, h.approveProject))
@@ -497,6 +505,82 @@ func (h *Handler) suspendProject(w http.ResponseWriter, r *http.Request) {
 		action = "suspended"
 	}
 	writeJSON(w, map[string]string{"status": action})
+}
+
+func (h *Handler) resolveProgramGit(ctx context.Context, namespace, name string) (gitpkg.Provider, *gitpkg.SourceInfo, error) {
+	program, err := h.k8s.GetProgram(ctx, namespace, name)
+	if err != nil {
+		return nil, nil, fmt.Errorf("program not found: %w", err)
+	}
+
+	var spec struct {
+		Source *struct {
+			URL                string `json:"url"`
+			Ref                string `json:"ref"`
+			Path               string `json:"path"`
+			CredentialsSecretRef *struct {
+				Name string `json:"name"`
+			} `json:"credentialsSecretRef"`
+		} `json:"source"`
+	}
+	if err := json.Unmarshal(program.Spec, &spec); err != nil || spec.Source == nil || spec.Source.URL == "" {
+		return nil, nil, fmt.Errorf("program has no git source")
+	}
+
+	credSecret := ""
+	if spec.Source.CredentialsSecretRef != nil {
+		credSecret = spec.Source.CredentialsSecretRef.Name
+	}
+
+	provider, info, err := h.git.ForSource(ctx, spec.Source.URL, namespace, credSecret)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	info.Ref = spec.Source.Ref
+	info.Path = spec.Source.Path
+	if info.Ref == "" {
+		info.Ref = "main"
+	}
+
+	return provider, info, nil
+}
+
+func (h *Handler) listProgramCommits(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+
+	provider, info, err := h.resolveProgramGit(r.Context(), ns, name)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	commits, err := provider.ListCommits(r.Context(), info.Owner, info.Repo, info.Ref, info.Path, 30)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, commits)
+}
+
+func (h *Handler) getProgramCommit(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+	sha := r.PathValue("sha")
+
+	provider, info, err := h.resolveProgramGit(r.Context(), ns, name)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	detail, err := provider.GetCommit(r.Context(), info.Owner, info.Repo, sha)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, detail)
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
