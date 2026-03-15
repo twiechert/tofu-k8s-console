@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/twiechert/tofu-k8s-console/internal/auth"
 	"github.com/twiechert/tofu-k8s-console/internal/k8s"
+	"github.com/twiechert/tofu-k8s-console/internal/middleware"
 )
 
 // Handler provides HTTP handlers for the API.
@@ -17,27 +19,49 @@ func NewHandler(k8sClient *k8s.Client) *Handler {
 	return &Handler{k8s: k8sClient}
 }
 
+// wrap applies role-based middleware to a handler func.
+func wrap(role auth.Role, fn http.HandlerFunc) http.Handler {
+	return middleware.RequireRole(role)(http.HandlerFunc(fn))
+}
+
 // RegisterRoutes registers all API routes on the given mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/projects", h.listProjects)
-	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}", h.getProject)
-	mux.HandleFunc("POST /api/v1/projects", h.createProject)
-	mux.HandleFunc("PUT /api/v1/projects/{namespace}/{name}", h.updateProject)
-	mux.HandleFunc("DELETE /api/v1/projects/{namespace}/{name}", h.deleteProject)
-	mux.HandleFunc("GET /api/v1/programs", h.listPrograms)
-	mux.HandleFunc("GET /api/v1/programs/{namespace}/{name}", h.getProgram)
-	mux.HandleFunc("POST /api/v1/programs", h.createProgram)
-	mux.HandleFunc("PUT /api/v1/programs/{namespace}/{name}", h.updateProgram)
-	mux.HandleFunc("DELETE /api/v1/programs/{namespace}/{name}", h.deleteProgram)
-	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/revisions", h.listRevisions)
-	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/approve", h.approveProject)
-	mux.HandleFunc("GET /api/v1/jobs", h.listJobs)
-	mux.HandleFunc("GET /api/v1/jobs/{namespace}/{name}/logs", h.getJobLogs)
-	mux.HandleFunc("GET /api/v1/overview", h.getOverview)
-	mux.HandleFunc("GET /api/v1/graph", h.getGraph)
-	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/rerun", h.rerunProject)
-	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/suspend", h.suspendProject)
-	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/resources", h.listResources)
+	// Auth
+	mux.HandleFunc("GET /api/v1/auth/me", h.getMe)
+
+	// Read (viewer)
+	mux.Handle("GET /api/v1/projects", wrap(auth.RoleViewer, h.listProjects))
+	mux.Handle("GET /api/v1/projects/{namespace}/{name}", wrap(auth.RoleViewer, h.getProject))
+	mux.Handle("GET /api/v1/programs", wrap(auth.RoleViewer, h.listPrograms))
+	mux.Handle("GET /api/v1/programs/{namespace}/{name}", wrap(auth.RoleViewer, h.getProgram))
+	mux.Handle("GET /api/v1/projects/{namespace}/{name}/revisions", wrap(auth.RoleViewer, h.listRevisions))
+	mux.Handle("GET /api/v1/projects/{namespace}/{name}/resources", wrap(auth.RoleViewer, h.listResources))
+	mux.Handle("GET /api/v1/jobs", wrap(auth.RoleViewer, h.listJobs))
+	mux.Handle("GET /api/v1/jobs/{namespace}/{name}/logs", wrap(auth.RoleViewer, h.getJobLogs))
+	mux.Handle("GET /api/v1/overview", wrap(auth.RoleViewer, h.getOverview))
+	mux.Handle("GET /api/v1/graph", wrap(auth.RoleViewer, h.getGraph))
+
+	// Operate (operator)
+	mux.Handle("POST /api/v1/projects/{namespace}/{name}/approve", wrap(auth.RoleOperator, h.approveProject))
+	mux.Handle("POST /api/v1/projects/{namespace}/{name}/rerun", wrap(auth.RoleOperator, h.rerunProject))
+	mux.Handle("POST /api/v1/projects/{namespace}/{name}/suspend", wrap(auth.RoleOperator, h.suspendProject))
+
+	// Edit (editor)
+	mux.Handle("POST /api/v1/projects", wrap(auth.RoleEditor, h.createProject))
+	mux.Handle("PUT /api/v1/projects/{namespace}/{name}", wrap(auth.RoleEditor, h.updateProject))
+	mux.Handle("DELETE /api/v1/projects/{namespace}/{name}", wrap(auth.RoleEditor, h.deleteProject))
+	mux.Handle("POST /api/v1/programs", wrap(auth.RoleEditor, h.createProgram))
+	mux.Handle("PUT /api/v1/programs/{namespace}/{name}", wrap(auth.RoleEditor, h.updateProgram))
+	mux.Handle("DELETE /api/v1/programs/{namespace}/{name}", wrap(auth.RoleEditor, h.deleteProgram))
+}
+
+func (h *Handler) getMe(w http.ResponseWriter, r *http.Request) {
+	user := middleware.UserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	writeJSON(w, user)
 }
 
 func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {

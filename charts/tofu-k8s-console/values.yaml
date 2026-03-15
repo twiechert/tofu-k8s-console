@@ -34,6 +34,35 @@ serviceAccount:
 
 resources: {}
 
+# Auth configuration. Mode: "none" (default), "oidc", or "header".
+auth:
+  mode: "none"
+
+  # OIDC settings (when mode=oidc)
+  oidc:
+    issuerURL: ""
+    clientID: ""
+    clientSecret: ""
+    redirectURL: ""
+    scopes: ["openid", "profile", "email"]
+
+  # Header settings (when mode=header, for use with oauth2-proxy etc.)
+  header:
+    userHeader: "X-Forwarded-User"
+    emailHeader: "X-Forwarded-Email"
+    groupsHeader: "X-Forwarded-Groups"
+
+  # Role mappings
+  roleMappings: []
+  #  - match: group
+  #    value: platform-team
+  #    role: admin
+  #  - match: email
+  #    value: "*@example.com"
+  #    role: viewer
+
+  defaultRole: viewer
+
 nodeSelector: {}
 tolerations: []
 affinity: {}

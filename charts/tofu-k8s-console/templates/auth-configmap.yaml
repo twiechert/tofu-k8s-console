@@ -1,0 +1,30 @@
+{{- if ne .Values.auth.mode "none" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tofu-k8s-console-auth
+  namespace: {{ .Release.Namespace }}
+data:
+  auth.json: |
+    {
+      "mode": {{ .Values.auth.mode | quote }},
+      {{- if eq .Values.auth.mode "oidc" }}
+      "oidc": {
+        "issuerURL": {{ .Values.auth.oidc.issuerURL | quote }},
+        "clientID": {{ .Values.auth.oidc.clientID | quote }},
+        "clientSecret": {{ .Values.auth.oidc.clientSecret | quote }},
+        "redirectURL": {{ .Values.auth.oidc.redirectURL | quote }},
+        "scopes": {{ .Values.auth.oidc.scopes | toJson }}
+      },
+      {{- end }}
+      {{- if eq .Values.auth.mode "header" }}
+      "header": {
+        "userHeader": {{ .Values.auth.header.userHeader | quote }},
+        "emailHeader": {{ .Values.auth.header.emailHeader | quote }},
+        "groupsHeader": {{ .Values.auth.header.groupsHeader | quote }}
+      },
+      {{- end }}
+      "roleMappings": {{ .Values.auth.roleMappings | toJson }},
+      "defaultRole": {{ .Values.auth.defaultRole | quote }}
+    }
+{{- end }}

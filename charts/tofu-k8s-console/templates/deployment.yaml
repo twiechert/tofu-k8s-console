@@ -20,6 +20,15 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
             - "--addr=:{{ .Values.service.port }}"
+            {{- if ne .Values.auth.mode "none" }}
+            - "--auth-config=/etc/console/auth.json"
+            {{- end }}
+          {{- if ne .Values.auth.mode "none" }}
+          volumeMounts:
+            - name: auth-config
+              mountPath: /etc/console
+              readOnly: true
+          {{- end }}
           ports:
             - containerPort: {{ .Values.service.port }}
               name: http
@@ -37,6 +46,12 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- if ne .Values.auth.mode "none" }}
+      volumes:
+        - name: auth-config
+          configMap:
+            name: tofu-k8s-console-auth
+      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
