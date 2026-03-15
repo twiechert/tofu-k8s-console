@@ -1,6 +1,16 @@
-# tofu-k8s-console
+<p align="center">
+  <img src="logo.png" alt="tofu-k8s-console" width="200"/>
+  <br/>
+  <strong>tofu-k8s-console</strong>
+  <br/>
+  <em>Web console for the <a href="https://github.com/twiechert/tofu-k8s-operator">tofu-k8s-operator</a> — manage OpenTofu/Terraform workloads on Kubernetes.</em>
+</p>
 
-Web console for the [tofu-k8s-operator](https://github.com/twiechert/tofu-k8s-operator) — a management UI for OpenTofu/Terraform workloads running on Kubernetes.
+<p align="center">
+  <a href="https://github.com/twiechert/tofu-k8s-console/actions/workflows/ci.yaml"><img src="https://github.com/twiechert/tofu-k8s-console/actions/workflows/ci.yaml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/twiechert/tofu-k8s-console/releases/latest"><img src="https://img.shields.io/github/v/release/twiechert/tofu-k8s-console" alt="Release"></a>
+  <a href="https://github.com/twiechert/tofu-k8s-console/blob/main/LICENSE"><img src="https://img.shields.io/github/license/twiechert/tofu-k8s-console" alt="License"></a>
+</p>
 
 ## Features
 
