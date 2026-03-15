@@ -12,16 +12,31 @@
   <a href="https://github.com/twiechert/tofu-k8s-console/blob/main/LICENSE"><img src="https://img.shields.io/github/license/twiechert/tofu-k8s-console" alt="License"></a>
 </p>
 
+## Screenshots
+
+| Overview | Projects | Project Detail |
+|----------|----------|----------------|
+| ![Overview](docs/screenshots/overview.png) | ![Projects](docs/screenshots/projects.png) | ![Project Detail](docs/screenshots/project-detail.png) |
+
+| Resources | Jobs & Logs | Stack Graph |
+|-----------|-------------|-------------|
+| ![Resources](docs/screenshots/resources.png) | ![Jobs](docs/screenshots/job-logs.png) | ![Stack Graph](docs/screenshots/stack-graph.png) |
+
+| Revisions | Create Project | Spec Editor |
+|-----------|----------------|-------------|
+| ![Revisions](docs/screenshots/project-revisions.png) | ![Create](docs/screenshots/create-project.png) | ![Spec](docs/screenshots/project-spec.png) |
+
 ## Features
 
 - **Overview** — aggregate stats, phase breakdown, error/drift counts
 - **Projects** — list, search, detail view with plan output, outputs, blast radius
 - **Programs** — list all TofuProgram resources
 - **Resources** — view managed infrastructure resources parsed from plan output
-- **Jobs** — running and completed jobs with duration tracking
+- **Jobs** — running and completed jobs with duration tracking and expandable logs
 - **Revisions** — full audit trail per project with snapshot files
-- **Stack Graph** — interactive dependency graph with drill-down (namespace → project → detail)
-- **Actions** — approve plans, rerun, suspend/resume directly from the UI
+- **Stack Graph** — interactive dependency graph with drill-down (namespace -> project -> detail)
+- **Actions** — approve plans, rerun, suspend/resume, edit spec, delete directly from the UI
+- **CRUD** — create, edit, and delete projects and programs from the UI
 
 ## Quick Start
 
