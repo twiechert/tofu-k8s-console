@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
+	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -156,6 +158,99 @@ func (c *Client) ApproveProject(ctx context.Context, namespace, name, hash strin
 		return fmt.Errorf("approving TofuProject %s/%s: %w", namespace, name, err)
 	}
 	return nil
+}
+
+// TofuJob represents a Kubernetes Job created by the operator.
+type TofuJob struct {
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	Project     string `json:"project"`
+	JobType     string `json:"jobType"` // plan, apply, destroy, drift, etc.
+	Status      string `json:"status"`  // running, succeeded, failed
+	StartTime   string `json:"startTime,omitempty"`
+	EndTime     string `json:"endTime,omitempty"`
+	DurationSec *int64 `json:"durationSec,omitempty"`
+}
+
+// ListJobs returns all tofu-operator Jobs across all namespaces (or a specific one).
+func (c *Client) ListJobs(ctx context.Context, namespace string) ([]TofuJob, error) {
+	var opts metav1.ListOptions
+	opts.LabelSelector = "app.kubernetes.io/managed-by=tofu-k8s-operator"
+
+	var jobList interface{ Items() []interface{} }
+	_ = jobList // unused
+
+	// Use the batch/v1 API via clientset
+	var jobs []TofuJob
+
+	if namespace != "" {
+		list, err := c.clientset.BatchV1().Jobs(namespace).List(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("listing jobs: %w", err)
+		}
+		for _, j := range list.Items {
+			jobs = append(jobs, toTofuJob(j))
+		}
+	} else {
+		list, err := c.clientset.BatchV1().Jobs("").List(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("listing jobs: %w", err)
+		}
+		for _, j := range list.Items {
+			jobs = append(jobs, toTofuJob(j))
+		}
+	}
+
+	return jobs, nil
+}
+
+func toTofuJob(j batchv1.Job) TofuJob {
+	tj := TofuJob{
+		Name:      j.Name,
+		Namespace: j.Namespace,
+		Project:   j.Labels["tofu.example.com/project"],
+		JobType:   j.Labels["tofu.example.com/job-type"],
+	}
+
+	if tj.JobType == "" {
+		// Infer from name
+		if strings.Contains(j.Name, "-plan-") {
+			tj.JobType = "plan"
+		} else if strings.Contains(j.Name, "-apply-") {
+			tj.JobType = "apply"
+		} else if strings.Contains(j.Name, "-destroy") {
+			tj.JobType = "destroy"
+		} else {
+			tj.JobType = "unknown"
+		}
+	}
+
+	// Status
+	if j.Status.Succeeded > 0 {
+		tj.Status = "succeeded"
+	} else if j.Status.Failed > 0 {
+		tj.Status = "failed"
+	} else if j.Status.Active > 0 {
+		tj.Status = "running"
+	} else {
+		tj.Status = "pending"
+	}
+
+	if j.Status.StartTime != nil {
+		tj.StartTime = j.Status.StartTime.Format("2006-01-02T15:04:05Z")
+
+		if j.Status.CompletionTime != nil {
+			tj.EndTime = j.Status.CompletionTime.Format("2006-01-02T15:04:05Z")
+			dur := int64(j.Status.CompletionTime.Sub(j.Status.StartTime.Time).Seconds())
+			tj.DurationSec = &dur
+		} else if tj.Status == "running" {
+			// Running job — compute elapsed so far
+			dur := int64(metav1.Now().Sub(j.Status.StartTime.Time).Seconds())
+			tj.DurationSec = &dur
+		}
+	}
+
+	return tj
 }
 
 // SetSuspend sets or clears the suspend field on a TofuProject.

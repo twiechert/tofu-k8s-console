@@ -25,6 +25,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/programs/{namespace}/{name}", h.getProgram)
 	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/revisions", h.listRevisions)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/approve", h.approveProject)
+	mux.HandleFunc("GET /api/v1/jobs", h.listJobs)
 	mux.HandleFunc("GET /api/v1/overview", h.getOverview)
 	mux.HandleFunc("GET /api/v1/graph", h.getGraph)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/rerun", h.rerunProject)
@@ -286,6 +287,16 @@ func (h *Handler) rerunProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]string{"status": "rerun triggered"})
+}
+
+func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
+	ns := r.URL.Query().Get("namespace")
+	jobs, err := h.k8s.ListJobs(r.Context(), ns)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, jobs)
 }
 
 func (h *Handler) listResources(w http.ResponseWriter, r *http.Request) {

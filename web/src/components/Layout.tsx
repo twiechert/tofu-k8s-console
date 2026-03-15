@@ -39,6 +39,7 @@ export function Layout() {
           <NavLink to="/projects" style={({ isActive }) => linkStyle(isActive)}>Projects</NavLink>
           <NavLink to="/programs" style={({ isActive }) => linkStyle(isActive)}>Programs</NavLink>
           <NavLink to="/resources" style={({ isActive }) => linkStyle(isActive)}>Resources</NavLink>
+          <NavLink to="/jobs" style={({ isActive }) => linkStyle(isActive)}>Jobs</NavLink>
         </div>
       </nav>
 
