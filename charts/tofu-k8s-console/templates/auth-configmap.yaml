@@ -22,6 +22,12 @@ data:
         "userHeader": {{ .Values.auth.header.userHeader | quote }},
         "emailHeader": {{ .Values.auth.header.emailHeader | quote }},
         "groupsHeader": {{ .Values.auth.header.groupsHeader | quote }}
+        {{- if .Values.auth.header.jwtHeader }},
+        "jwtHeader": {{ .Values.auth.header.jwtHeader | quote }},
+        "jwtEmailClaim": {{ .Values.auth.header.jwtEmailClaim | quote }},
+        "jwtNameClaim": {{ .Values.auth.header.jwtNameClaim | quote }},
+        "jwtGroupsClaim": {{ .Values.auth.header.jwtGroupsClaim | quote }}
+        {{- end }}
       },
       {{- end }}
       "roleMappings": {{ .Values.auth.roleMappings | toJson }},

@@ -51,6 +51,13 @@ auth:
     userHeader: "X-Forwarded-User"
     emailHeader: "X-Forwarded-Email"
     groupsHeader: "X-Forwarded-Groups"
+    # JWT claim extraction (e.g. for Cloudflare Access + Zitadel)
+    # Set jwtHeader to decode a JWT and extract email/name/groups from claims.
+    # The JWT is NOT verified — it's assumed pre-validated by the proxy.
+    jwtHeader: ""              # e.g. "Cf-Access-Jwt-Assertion"
+    jwtEmailClaim: "email"     # claim path for email
+    jwtNameClaim: "name"       # claim path for display name
+    jwtGroupsClaim: "groups"   # claim path for groups/roles (e.g. "custom:roles", "realm_access.roles")
 
   # Role mappings
   roleMappings: []

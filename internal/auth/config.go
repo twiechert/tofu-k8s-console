@@ -42,6 +42,17 @@ type HeaderConfig struct {
 	GroupsHeader string `json:"groupsHeader"` // default: X-Forwarded-Groups
 	// GroupsSeparator splits the groups header value. Default: ","
 	GroupsSeparator string `json:"groupsSeparator"`
+
+	// JWT extraction: if set, decode this header as a JWT and extract claims.
+	// The JWT is NOT verified (assumed pre-validated by the proxy, e.g. Cloudflare Access).
+	JWTHeader string `json:"jwtHeader,omitempty"` // e.g. "Cf-Access-Jwt-Assertion"
+	// JWTEmailClaim is the claim path for the user's email. Default: "email"
+	JWTEmailClaim string `json:"jwtEmailClaim,omitempty"`
+	// JWTNameClaim is the claim path for the user's name. Default: "name"
+	JWTNameClaim string `json:"jwtNameClaim,omitempty"`
+	// JWTGroupsClaim is the claim path for groups/roles. Default: "groups"
+	// Supports nested paths like "custom:roles" or "realm_access.roles"
+	JWTGroupsClaim string `json:"jwtGroupsClaim,omitempty"`
 }
 
 // RoleMapping maps a claim/group to a role.
@@ -85,6 +96,17 @@ func LoadConfig(path string) (*Config, error) {
 		}
 		if cfg.Header.GroupsSeparator == "" {
 			cfg.Header.GroupsSeparator = ","
+		}
+		if cfg.Header.JWTHeader != "" {
+			if cfg.Header.JWTEmailClaim == "" {
+				cfg.Header.JWTEmailClaim = "email"
+			}
+			if cfg.Header.JWTNameClaim == "" {
+				cfg.Header.JWTNameClaim = "name"
+			}
+			if cfg.Header.JWTGroupsClaim == "" {
+				cfg.Header.JWTGroupsClaim = "groups"
+			}
 		}
 	}
 
