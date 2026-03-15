@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
-import { timeAgo } from '../utils'
+import { timeAgo, stripAnsi } from '../utils'
 
 interface Job {
   name: string
@@ -42,6 +42,9 @@ export function JobsPage() {
   const { data, loading } = useApi<Job[]>('/api/v1/jobs')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'running' | 'failed'>('all')
+  const [expandedJob, setExpandedJob] = useState<string | null>(null)
+  const [logs, setLogs] = useState<Record<string, string>>({})
+  const [loadingLogs, setLoadingLogs] = useState<string | null>(null)
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
@@ -59,6 +62,31 @@ export function JobsPage() {
     if (q && !j.name.toLowerCase().includes(q) && !j.project.toLowerCase().includes(q) && !j.namespace.toLowerCase().includes(q)) return false
     return true
   })
+
+  const toggleLogs = async (ns: string, name: string) => {
+    const key = `${ns}/${name}`
+    if (expandedJob === key) {
+      setExpandedJob(null)
+      return
+    }
+    setExpandedJob(key)
+    if (!logs[key]) {
+      setLoadingLogs(key)
+      try {
+        const res = await fetch(`/api/v1/jobs/${ns}/${name}/logs`)
+        if (res.ok) {
+          const data = await res.json()
+          setLogs(prev => ({ ...prev, [key]: data.logs }))
+        } else {
+          setLogs(prev => ({ ...prev, [key]: `(failed to load logs: HTTP ${res.status})` }))
+        }
+      } catch (e) {
+        setLogs(prev => ({ ...prev, [key]: `(failed to load logs: ${e})` }))
+      } finally {
+        setLoadingLogs(null)
+      }
+    }
+  }
 
   const runningCount = data.filter(j => j.status === 'running').length
   const failedCount = data.filter(j => j.status === 'failed').length
@@ -128,32 +156,50 @@ export function JobsPage() {
             ) : filtered.map(j => {
               const sb = statusBadge[j.status] || { cls: 'badge-muted', label: j.status }
               const tb = typeBadge[j.jobType] || 'badge-muted'
+              const key = `${j.namespace}/${j.name}`
+              const isExpanded = expandedJob === key
               return (
-                <tr key={`${j.namespace}/${j.name}`}>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{j.name}</td>
-                  <td>
-                    {j.project ? (
-                      <Link to={`/projects/${j.namespace}/${j.project}`}>{j.project}</Link>
-                    ) : '-'}
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> ({j.namespace})</span>
-                  </td>
-                  <td><span className={`badge ${tb}`}>{j.jobType}</span></td>
-                  <td>
-                    <span className={`badge ${sb.cls}`}>
-                      {j.status === 'running' && '● '}{sb.label}
-                    </span>
-                  </td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                    {j.status === 'running' ? (
-                      <span style={{ color: 'var(--info)' }}>{formatDuration(j.durationSec)} ...</span>
-                    ) : (
-                      formatDuration(j.durationSec)
-                    )}
-                  </td>
-                  <td style={{ color: 'var(--text-muted)' }} title={j.startTime}>
-                    {j.startTime ? timeAgo(j.startTime) : '-'}
-                  </td>
-                </tr>
+                <>
+                  <tr key={key} onClick={() => toggleLogs(j.namespace, j.name)} style={{ cursor: 'pointer' }}>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                      <span style={{ color: 'var(--text-muted)', marginRight: '6px' }}>{isExpanded ? '▾' : '▸'}</span>
+                      {j.name}
+                    </td>
+                    <td>
+                      {j.project ? (
+                        <Link to={`/projects/${j.namespace}/${j.project}`} onClick={e => e.stopPropagation()}>{j.project}</Link>
+                      ) : '-'}
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}> ({j.namespace})</span>
+                    </td>
+                    <td><span className={`badge ${tb}`}>{j.jobType}</span></td>
+                    <td>
+                      <span className={`badge ${sb.cls}`}>
+                        {j.status === 'running' && '● '}{sb.label}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                      {j.status === 'running' ? (
+                        <span style={{ color: 'var(--info)' }}>{formatDuration(j.durationSec)} ...</span>
+                      ) : (
+                        formatDuration(j.durationSec)
+                      )}
+                    </td>
+                    <td style={{ color: 'var(--text-muted)' }} title={j.startTime}>
+                      {j.startTime ? timeAgo(j.startTime) : '-'}
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${key}-logs`}>
+                      <td colSpan={6} style={{ padding: '0 16px 16px', background: 'var(--bg)' }}>
+                        {loadingLogs === key ? (
+                          <div style={{ color: 'var(--text-muted)', padding: '12px' }}>Loading logs...</div>
+                        ) : (
+                          <pre style={{ maxHeight: '400px', overflow: 'auto' }}>{stripAnsi(logs[key] || '')}</pre>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
               )
             })}
           </tbody>

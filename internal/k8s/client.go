@@ -8,7 +8,10 @@ import (
 	"strconv"
 	"strings"
 
+	"io"
+
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -251,6 +254,34 @@ func toTofuJob(j batchv1.Job) TofuJob {
 	}
 
 	return tj
+}
+
+// GetJobLogs returns the logs from the first pod of a Job.
+func (c *Client) GetJobLogs(ctx context.Context, namespace, jobName string) (string, error) {
+	// Find pods for this job
+	pods, err := c.clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("job-name=%s", jobName),
+	})
+	if err != nil {
+		return "", fmt.Errorf("listing pods for job %s: %w", jobName, err)
+	}
+	if len(pods.Items) == 0 {
+		return "(no pods found for this job)", nil
+	}
+
+	pod := pods.Items[0]
+	req := c.clientset.CoreV1().Pods(namespace).GetLogs(pod.Name, &corev1.PodLogOptions{})
+	stream, err := req.Stream(ctx)
+	if err != nil {
+		return "", fmt.Errorf("streaming logs for pod %s: %w", pod.Name, err)
+	}
+	defer stream.Close()
+
+	data, err := io.ReadAll(stream)
+	if err != nil {
+		return "", fmt.Errorf("reading logs: %w", err)
+	}
+	return string(data), nil
 }
 
 // SetSuspend sets or clears the suspend field on a TofuProject.
