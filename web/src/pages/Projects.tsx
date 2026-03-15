@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { PhaseBadge } from '../components/PhaseBadge'
 import { timeAgo } from '../utils'
@@ -25,6 +25,7 @@ interface Project {
 export function ProjectsPage() {
   const { data, loading } = useApi<Project[]>('/api/v1/projects')
   const [search, setSearch] = useState('')
+  const navigate = useNavigate()
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
@@ -37,6 +38,8 @@ export function ProjectsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <h1 style={{ marginBottom: 0 }}>Projects ({filtered.length})</h1>
+        <div style={{ display: 'flex', gap: '8px' }}>
+        <button onClick={() => navigate('/projects/new')} style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>+ Create</button>
         <input
           type="text"
           placeholder="Search projects..."
@@ -53,6 +56,7 @@ export function ProjectsPage() {
             outline: 'none',
           }}
         />
+        </div>
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <table>

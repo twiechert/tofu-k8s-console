@@ -9,6 +9,8 @@ import { ProgramsPage } from './pages/Programs.tsx'
 import { GraphPage } from './pages/Graph.tsx'
 import { ResourcesPage } from './pages/Resources.tsx'
 import { JobsPage } from './pages/Jobs.tsx'
+import { CreateProjectPage } from './pages/CreateProject.tsx'
+import { CreateProgramPage } from './pages/CreateProgram.tsx'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
@@ -19,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<OverviewPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:namespace/:name" element={<ProjectDetailPage />} />
+          <Route path="/projects/new" element={<CreateProjectPage />} />
           <Route path="/programs" element={<ProgramsPage />} />
+          <Route path="/programs/new" element={<CreateProgramPage />} />
           <Route path="/graph" element={<GraphPage />} />
           <Route path="/resources" element={<ResourcesPage />} />
           <Route path="/jobs" element={<JobsPage />} />

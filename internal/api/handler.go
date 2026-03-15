@@ -21,8 +21,10 @@ func NewHandler(k8sClient *k8s.Client) *Handler {
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects", h.listProjects)
 	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}", h.getProject)
+	mux.HandleFunc("POST /api/v1/projects", h.createProject)
 	mux.HandleFunc("GET /api/v1/programs", h.listPrograms)
 	mux.HandleFunc("GET /api/v1/programs/{namespace}/{name}", h.getProgram)
+	mux.HandleFunc("POST /api/v1/programs", h.createProgram)
 	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/revisions", h.listRevisions)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/approve", h.approveProject)
 	mux.HandleFunc("GET /api/v1/jobs", h.listJobs)
@@ -298,6 +300,58 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, jobs)
+}
+
+func (h *Handler) createProject(w http.ResponseWriter, r *http.Request) {
+	var body map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	metadata, _ := body["metadata"].(map[string]interface{})
+	if metadata == nil {
+		writeError(w, http.StatusBadRequest, "missing metadata")
+		return
+	}
+	ns, _ := metadata["namespace"].(string)
+	if ns == "" {
+		ns = "default"
+		metadata["namespace"] = ns
+	}
+	body["apiVersion"] = "tofu.example.com/v1alpha1"
+	body["kind"] = "TofuProject"
+	if err := h.k8s.CreateProject(r.Context(), ns, body); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, map[string]string{"status": "created"})
+}
+
+func (h *Handler) createProgram(w http.ResponseWriter, r *http.Request) {
+	var body map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	metadata, _ := body["metadata"].(map[string]interface{})
+	if metadata == nil {
+		writeError(w, http.StatusBadRequest, "missing metadata")
+		return
+	}
+	ns, _ := metadata["namespace"].(string)
+	if ns == "" {
+		ns = "default"
+		metadata["namespace"] = ns
+	}
+	body["apiVersion"] = "tofu.example.com/v1alpha1"
+	body["kind"] = "TofuProgram"
+	if err := h.k8s.CreateProgram(r.Context(), ns, body); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, map[string]string{"status": "created"})
 }
 
 func (h *Handler) getJobLogs(w http.ResponseWriter, r *http.Request) {

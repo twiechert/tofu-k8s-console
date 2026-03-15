@@ -284,6 +284,22 @@ func (c *Client) GetJobLogs(ctx context.Context, namespace, jobName string) (str
 	return string(data), nil
 }
 
+// CreateProject creates a TofuProject from an unstructured spec.
+func (c *Client) CreateProject(ctx context.Context, namespace string, obj map[string]interface{}) error {
+	u := &unstructured.Unstructured{Object: obj}
+	u.SetGroupVersionKind(schema.GroupVersionKind{Group: "tofu.example.com", Version: "v1alpha1", Kind: "TofuProject"})
+	_, err := c.dyn.Resource(projectGVR).Namespace(namespace).Create(ctx, u, metav1.CreateOptions{})
+	return err
+}
+
+// CreateProgram creates a TofuProgram from an unstructured spec.
+func (c *Client) CreateProgram(ctx context.Context, namespace string, obj map[string]interface{}) error {
+	u := &unstructured.Unstructured{Object: obj}
+	u.SetGroupVersionKind(schema.GroupVersionKind{Group: "tofu.example.com", Version: "v1alpha1", Kind: "TofuProgram"})
+	_, err := c.dyn.Resource(programGVR).Namespace(namespace).Create(ctx, u, metav1.CreateOptions{})
+	return err
+}
+
 // SetSuspend sets or clears the suspend field on a TofuProject.
 func (c *Client) SetSuspend(ctx context.Context, namespace, name string, suspend bool) error {
 	patch := fmt.Sprintf(`{"spec":{"suspend":%t}}`, suspend)
