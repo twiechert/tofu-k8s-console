@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Breadcrumb } from '../components/Breadcrumb'
 import { Field, TextInput, TextArea, Select } from '../components/FormFields'
 
 interface Provider {
@@ -70,6 +71,7 @@ export function CreateProgramPage() {
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Programs', to: '/programs' }, { label: 'Create' }]} />
       <h1>Create Program</h1>
       {error && <div style={{ color: 'var(--error)', marginBottom: '16px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>{error}</div>}
 

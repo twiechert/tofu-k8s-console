@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { timeAgo, stripAnsi } from '../utils'
@@ -39,12 +39,20 @@ function formatDuration(sec?: number): string {
 }
 
 export function JobsPage() {
-  const { data, loading } = useApi<Job[]>('/api/v1/jobs')
+  const { data, loading } = useApi<Job[]>('/api/v1/jobs', 5000)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'running' | 'failed'>('all')
   const [expandedJob, setExpandedJob] = useState<string | null>(null)
   const [logs, setLogs] = useState<Record<string, string>>({})
   const [loadingLogs, setLoadingLogs] = useState<string | null>(null)
+  const logsRef = useRef<HTMLPreElement>(null)
+
+  // Auto-scroll logs to bottom when they load or update
+  useEffect(() => {
+    if (logsRef.current) {
+      logsRef.current.scrollTop = logsRef.current.scrollHeight
+    }
+  }, [logs, expandedJob])
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
@@ -194,7 +202,19 @@ export function JobsPage() {
                         {loadingLogs === key ? (
                           <div style={{ color: 'var(--text-muted)', padding: '12px' }}>Loading logs...</div>
                         ) : (
-                          <pre style={{ maxHeight: '400px', overflow: 'auto' }}>{stripAnsi(logs[key] || '')}</pre>
+                          <>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                              <button onClick={(e) => {
+                                e.stopPropagation()
+                                const blob = new Blob([stripAnsi(logs[key] || '')], { type: 'text/plain' })
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url; a.download = `${j.name}-logs.txt`; a.click()
+                                URL.revokeObjectURL(url)
+                              }} style={{ padding: '2px 10px', borderRadius: '4px', border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.75rem' }}>Download</button>
+                            </div>
+                            <pre ref={isExpanded ? logsRef : undefined} style={{ maxHeight: '400px', overflow: 'auto' }}>{stripAnsi(logs[key] || '')}</pre>
+                          </>
                         )}
                       </td>
                     </tr>

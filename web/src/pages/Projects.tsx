@@ -23,7 +23,7 @@ interface Project {
 }
 
 export function ProjectsPage() {
-  const { data, loading } = useApi<Project[]>('/api/v1/projects')
+  const { data, loading } = useApi<Project[]>('/api/v1/projects', 5000)
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
 

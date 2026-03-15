@@ -10,7 +10,7 @@ interface OverviewData {
 }
 
 export function OverviewPage() {
-  const { data, loading } = useApi<OverviewData>('/api/v1/overview')
+  const { data, loading } = useApi<OverviewData>('/api/v1/overview', 5000)
 
   if (loading || !data) return <div className="loading">Loading...</div>
 

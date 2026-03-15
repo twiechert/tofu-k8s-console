@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Breadcrumb } from '../components/Breadcrumb'
 import { useApi } from '../hooks/useApi'
 import { Field, TextInput, TextArea, Checkbox, KeyValueEditor, Select } from '../components/FormFields'
 
@@ -72,6 +73,7 @@ export function CreateProjectPage() {
 
   return (
     <div>
+      <Breadcrumb items={[{ label: 'Projects', to: '/projects' }, { label: 'Create' }]} />
       <h1>Create Project</h1>
       {error && <div style={{ color: 'var(--error)', marginBottom: '16px', padding: '8px 12px', background: 'rgba(239,68,68,0.1)', borderRadius: '6px' }}>{error}</div>}
 

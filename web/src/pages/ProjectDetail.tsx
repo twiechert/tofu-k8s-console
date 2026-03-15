@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { PhaseBadge } from '../components/PhaseBadge'
 import { stripAnsi, timeAgo } from '../utils'
+import { Breadcrumb } from '../components/Breadcrumb'
 import { ResourceTable } from './Resources'
 import type { Resource } from './Resources'
 
@@ -47,7 +48,7 @@ type Tab = 'overview' | 'resources' | 'revisions' | 'spec'
 export function ProjectDetailPage() {
   const { namespace, name } = useParams()
   const navigate = useNavigate()
-  const { data, loading } = useApi<Project>(`/api/v1/projects/${namespace}/${name}`)
+  const { data, loading } = useApi<Project>(`/api/v1/projects/${namespace}/${name}`, 5000)
   const { data: revisions } = useApi<Revision[]>(`/api/v1/projects/${namespace}/${name}/revisions`)
   const { data: resources } = useApi<Resource[]>(`/api/v1/projects/${namespace}/${name}/resources`)
   const [tab, setTab] = useState<Tab>('overview')
@@ -112,8 +113,13 @@ export function ProjectDetailPage() {
 
   return (
     <div>
+      <Breadcrumb items={[
+        { label: 'Projects', to: '/projects' },
+        { label: data.namespace },
+        { label: data.name },
+      ]} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <h1 style={{ marginBottom: 0 }}>{data.namespace}/{data.name}</h1>
+        <h1 style={{ marginBottom: 0 }}>{data.name}</h1>
         <div style={{ display: 'flex', gap: '8px' }}>
           {canApprove && actionButton('Approve Plan', 'approve', 'var(--success)', approving)}
           {actionButton('Rerun', 'rerun', 'var(--info)', rerunning)}
@@ -201,7 +207,16 @@ export function ProjectDetailPage() {
 
           {s.planOutput && (
             <div className="card">
-              <h2>Plan Output</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Plan Output</h2>
+                <button onClick={() => {
+                  const blob = new Blob([stripAnsi(s.planOutput)], { type: 'text/plain' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url; a.download = `${name}-plan.txt`; a.click()
+                  URL.revokeObjectURL(url)
+                }} style={{ padding: '4px 12px', borderRadius: '4px', border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Download</button>
+              </div>
               <pre>{stripAnsi(s.planOutput)}</pre>
             </div>
           )}
