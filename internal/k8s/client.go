@@ -300,6 +300,36 @@ func (c *Client) CreateProgram(ctx context.Context, namespace string, obj map[st
 	return err
 }
 
+// DeleteProject deletes a TofuProject.
+func (c *Client) DeleteProject(ctx context.Context, namespace, name string) error {
+	return c.dyn.Resource(projectGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// DeleteProgram deletes a TofuProgram.
+func (c *Client) DeleteProgram(ctx context.Context, namespace, name string) error {
+	return c.dyn.Resource(programGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+}
+
+// UpdateProject patches a TofuProject spec.
+func (c *Client) UpdateProject(ctx context.Context, namespace, name string, spec map[string]interface{}) error {
+	patch, err := json.Marshal(map[string]interface{}{"spec": spec})
+	if err != nil {
+		return err
+	}
+	_, err = c.dyn.Resource(projectGVR).Namespace(namespace).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	return err
+}
+
+// UpdateProgram patches a TofuProgram spec.
+func (c *Client) UpdateProgram(ctx context.Context, namespace, name string, spec map[string]interface{}) error {
+	patch, err := json.Marshal(map[string]interface{}{"spec": spec})
+	if err != nil {
+		return err
+	}
+	_, err = c.dyn.Resource(programGVR).Namespace(namespace).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+	return err
+}
+
 // SetSuspend sets or clears the suspend field on a TofuProject.
 func (c *Client) SetSuspend(ctx context.Context, namespace, name string, suspend bool) error {
 	patch := fmt.Sprintf(`{"spec":{"suspend":%t}}`, suspend)

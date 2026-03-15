@@ -69,6 +69,7 @@ export function ProjectsPage() {
               <th>Revision</th>
               <th>Drift</th>
               <th>Created</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -84,6 +85,9 @@ export function ProjectsPage() {
                 <td>{p.status?.driftDetected ? '⚠' : '-'}</td>
                 <td style={{ color: 'var(--text-muted)' }} title={p.createdAt}>
                   {timeAgo(p.createdAt)}
+                </td>
+                <td>
+                  <button onClick={async (e) => { e.stopPropagation(); if (!confirm(`Delete project ${p.name}?`)) return; await fetch(`/api/v1/projects/${p.namespace}/${p.name}`, { method: 'DELETE' }); window.location.reload() }} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
                 </td>
               </tr>
             ))}

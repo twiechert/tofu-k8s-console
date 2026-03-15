@@ -59,6 +59,7 @@ export function ProgramsPage() {
               <th>Source</th>
               <th>Providers</th>
               <th>Created</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -77,6 +78,9 @@ export function ProgramsPage() {
                 </td>
                 <td style={{ color: 'var(--text-muted)' }} title={p.createdAt}>
                   {timeAgo(p.createdAt)}
+                </td>
+                <td>
+                  <button onClick={async () => { if (!confirm(`Delete program ${p.name}?`)) return; await fetch(`/api/v1/programs/${p.namespace}/${p.name}`, { method: 'DELETE' }); window.location.reload() }} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
                 </td>
               </tr>
             ))}

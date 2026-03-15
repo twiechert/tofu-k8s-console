@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { PhaseBadge } from '../components/PhaseBadge'
 import { stripAnsi, timeAgo } from '../utils'
@@ -46,6 +46,7 @@ type Tab = 'overview' | 'resources' | 'revisions' | 'spec'
 
 export function ProjectDetailPage() {
   const { namespace, name } = useParams()
+  const navigate = useNavigate()
   const { data, loading } = useApi<Project>(`/api/v1/projects/${namespace}/${name}`)
   const { data: revisions } = useApi<Revision[]>(`/api/v1/projects/${namespace}/${name}/revisions`)
   const { data: resources } = useApi<Resource[]>(`/api/v1/projects/${namespace}/${name}/resources`)
@@ -54,6 +55,10 @@ export function ProjectDetailPage() {
   const [approving, setApproving] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [suspending, setSuspending] = useState(false)
+  const [editSpec, setEditSpec] = useState('')
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
 
   if (loading || !data) return <div className="loading">Loading...</div>
 
@@ -286,8 +291,47 @@ export function ProjectDetailPage() {
 
       {tab === 'spec' && (
         <div className="card">
-          <h2>Spec</h2>
-          <pre>{JSON.stringify(data.spec, null, 2)}</pre>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 style={{ marginBottom: 0 }}>Spec</h2>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {!editing ? (
+                <button onClick={() => { setEditSpec(JSON.stringify(data.spec, null, 2)); setEditing(true) }} style={{ padding: '6px 14px', borderRadius: '4px', border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Edit</button>
+              ) : (
+                <>
+                  <button onClick={() => setEditing(false)} style={{ padding: '6px 14px', borderRadius: '4px', border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
+                  <button disabled={saving} onClick={async () => {
+                    try { JSON.parse(editSpec) } catch { alert('Invalid JSON'); return }
+                    setSaving(true)
+                    try {
+                      const res = await fetch(`/api/v1/projects/${namespace}/${name}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ spec: JSON.parse(editSpec) }) })
+                      if (!res.ok) { const d = await res.json(); throw new Error(d.error) }
+                      window.location.reload()
+                    } catch (e) { alert(`Save failed: ${e}`) } finally { setSaving(false) }
+                  }} style={{ padding: '6px 14px', borderRadius: '4px', border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>{saving ? 'Saving...' : 'Save'}</button>
+                </>
+              )}
+            </div>
+          </div>
+          {editing ? (
+            <textarea value={editSpec} onChange={e => setEditSpec(e.target.value)} style={{ width: '100%', minHeight: '300px', padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)', fontFamily: 'monospace', fontSize: '0.85rem', resize: 'vertical', outline: 'none' }} />
+          ) : (
+            <pre>{JSON.stringify(data.spec, null, 2)}</pre>
+          )}
+
+          <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+            {!deleteConfirm ? (
+              <button onClick={() => setDeleteConfirm(true)} style={{ padding: '6px 14px', borderRadius: '4px', border: '1px solid var(--error)', background: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '0.8rem' }}>Delete Project</button>
+            ) : (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>Are you sure? This will destroy infrastructure.</span>
+                <button onClick={async () => {
+                  await fetch(`/api/v1/projects/${namespace}/${name}`, { method: 'DELETE' })
+                  navigate('/projects')
+                }} style={{ padding: '6px 14px', borderRadius: '4px', border: 'none', background: 'var(--error)', color: '#fff', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Confirm Delete</button>
+                <button onClick={() => setDeleteConfirm(false)} style={{ padding: '6px 14px', borderRadius: '4px', border: '1px solid var(--border)', background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Cancel</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

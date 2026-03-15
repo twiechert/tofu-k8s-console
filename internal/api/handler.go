@@ -22,9 +22,13 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/projects", h.listProjects)
 	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}", h.getProject)
 	mux.HandleFunc("POST /api/v1/projects", h.createProject)
+	mux.HandleFunc("PUT /api/v1/projects/{namespace}/{name}", h.updateProject)
+	mux.HandleFunc("DELETE /api/v1/projects/{namespace}/{name}", h.deleteProject)
 	mux.HandleFunc("GET /api/v1/programs", h.listPrograms)
 	mux.HandleFunc("GET /api/v1/programs/{namespace}/{name}", h.getProgram)
 	mux.HandleFunc("POST /api/v1/programs", h.createProgram)
+	mux.HandleFunc("PUT /api/v1/programs/{namespace}/{name}", h.updateProgram)
+	mux.HandleFunc("DELETE /api/v1/programs/{namespace}/{name}", h.deleteProgram)
 	mux.HandleFunc("GET /api/v1/projects/{namespace}/{name}/revisions", h.listRevisions)
 	mux.HandleFunc("POST /api/v1/projects/{namespace}/{name}/approve", h.approveProject)
 	mux.HandleFunc("GET /api/v1/jobs", h.listJobs)
@@ -352,6 +356,60 @@ func (h *Handler) createProgram(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusCreated)
 	writeJSON(w, map[string]string{"status": "created"})
+}
+
+func (h *Handler) updateProject(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+	var body struct {
+		Spec map[string]interface{} `json:"spec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if err := h.k8s.UpdateProject(r.Context(), ns, name, body.Spec); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "updated"})
+}
+
+func (h *Handler) deleteProject(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+	if err := h.k8s.DeleteProject(r.Context(), ns, name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "deleted"})
+}
+
+func (h *Handler) updateProgram(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+	var body struct {
+		Spec map[string]interface{} `json:"spec"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		return
+	}
+	if err := h.k8s.UpdateProgram(r.Context(), ns, name, body.Spec); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "updated"})
+}
+
+func (h *Handler) deleteProgram(w http.ResponseWriter, r *http.Request) {
+	ns := r.PathValue("namespace")
+	name := r.PathValue("name")
+	if err := h.k8s.DeleteProgram(r.Context(), ns, name); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, map[string]string{"status": "deleted"})
 }
 
 func (h *Handler) getJobLogs(w http.ResponseWriter, r *http.Request) {
