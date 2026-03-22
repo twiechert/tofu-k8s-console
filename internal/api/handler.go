@@ -43,6 +43,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/jobs", wrap(auth.RoleViewer, h.listJobs))
 	mux.Handle("GET /api/v1/jobs/{namespace}/{name}/logs", wrap(auth.RoleViewer, h.getJobLogs))
 	mux.Handle("GET /api/v1/overview", wrap(auth.RoleViewer, h.getOverview))
+	mux.Handle("GET /api/v1/drift", wrap(auth.RoleViewer, h.getDrift))
 	mux.Handle("GET /api/v1/graph", wrap(auth.RoleViewer, h.getGraph))
 
 	// Git integration
@@ -201,6 +202,116 @@ func (h *Handler) getOverview(w http.ResponseWriter, r *http.Request) {
 		DriftCount:     driftCount,
 		ErrorCount:     errorCount,
 		Namespaces:     namespaces,
+	})
+}
+
+// DriftProject represents a project's drift state with enriched context.
+type DriftProject struct {
+	Name          string          `json:"name"`
+	Namespace     string          `json:"namespace"`
+	Phase         string          `json:"phase"`
+	DriftDetected bool            `json:"driftDetected"`
+	BlastRadius   json.RawMessage `json:"blastRadius,omitempty"`
+	PlanSummary   string          `json:"planSummary,omitempty"`
+	ProgramRef    string          `json:"programRef"`
+	Suspended     bool            `json:"suspended"`
+	PendingHash   string          `json:"pendingPlanHash,omitempty"`
+}
+
+// DriftOverview is the response for the drift dashboard endpoint.
+type DriftOverview struct {
+	TotalProjects int             `json:"totalProjects"`
+	DriftedCount  int             `json:"driftedCount"`
+	ByNamespace   map[string]int  `json:"byNamespace"`
+	BySeverity    map[string]int  `json:"bySeverity"` // low, medium, high based on blast radius
+	Projects      []DriftProject  `json:"projects"`
+	DriftJobs     []k8s.TofuJob   `json:"driftJobs"`
+}
+
+func (h *Handler) getDrift(w http.ResponseWriter, r *http.Request) {
+	projects, err := h.k8s.ListProjects(r.Context(), "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jobs, err := h.k8s.ListJobs(r.Context(), "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Filter drift jobs only
+	var driftJobs []k8s.TofuJob
+	for _, j := range jobs {
+		if j.JobType == "drift" {
+			driftJobs = append(driftJobs, j)
+		}
+	}
+
+	byNamespace := map[string]int{}
+	bySeverity := map[string]int{}
+	driftedCount := 0
+	var driftProjects []DriftProject
+
+	for _, p := range projects {
+		var status struct {
+			Phase         string          `json:"phase"`
+			DriftDetected bool            `json:"driftDetected"`
+			BlastRadius   json.RawMessage `json:"blastRadius"`
+			PlanSummary   string          `json:"planSummary"`
+			PendingHash   string          `json:"pendingPlanHash"`
+		}
+		_ = json.Unmarshal(p.Status, &status)
+
+		var spec struct {
+			ProgramRef struct {
+				Name string `json:"name"`
+			} `json:"programRef"`
+			Suspend bool `json:"suspend"`
+		}
+		_ = json.Unmarshal(p.Spec, &spec)
+
+		dp := DriftProject{
+			Name:          p.Name,
+			Namespace:     p.Namespace,
+			Phase:         status.Phase,
+			DriftDetected: status.DriftDetected,
+			BlastRadius:   status.BlastRadius,
+			PlanSummary:   status.PlanSummary,
+			ProgramRef:    spec.ProgramRef.Name,
+			Suspended:     spec.Suspend,
+			PendingHash:   status.PendingHash,
+		}
+		driftProjects = append(driftProjects, dp)
+
+		if status.DriftDetected {
+			driftedCount++
+			byNamespace[p.Namespace]++
+
+			// Categorize severity by blast radius total
+			var br struct {
+				Total int `json:"total"`
+			}
+			_ = json.Unmarshal(status.BlastRadius, &br)
+			switch {
+			case br.Total >= 10:
+				bySeverity["high"]++
+			case br.Total >= 3:
+				bySeverity["medium"]++
+			default:
+				bySeverity["low"]++
+			}
+		}
+	}
+
+	writeJSON(w, DriftOverview{
+		TotalProjects: len(projects),
+		DriftedCount:  driftedCount,
+		ByNamespace:   byNamespace,
+		BySeverity:    bySeverity,
+		Projects:      driftProjects,
+		DriftJobs:     driftJobs,
 	})
 }
 

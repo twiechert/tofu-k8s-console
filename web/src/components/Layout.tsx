@@ -48,6 +48,7 @@ export function Layout() {
             Dashboard
           </div>
           <NavLink to="/" end style={({ isActive }) => linkStyle(isActive)}>Overview</NavLink>
+          <NavLink to="/drift" style={({ isActive }) => linkStyle(isActive)}>Drift</NavLink>
           <NavLink to="/graph" style={({ isActive }) => linkStyle(isActive)}>Stack Graph</NavLink>
         </div>
 
@@ -74,8 +75,38 @@ export function Layout() {
         </div>
       </nav>
 
-      <main style={{ flex: 1, overflow: 'auto' }}>
-        <div className="container">
+      <main style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {user && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            padding: '10px 32px',
+            borderBottom: '1px solid var(--border)',
+            background: 'var(--bg-card)',
+            flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.85rem' }}>
+              <span style={{ color: 'var(--text-muted)' }}>{user.name || user.email}</span>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '2px 10px',
+                borderRadius: '12px',
+                background: `${roleBadgeColor[user.role] || 'var(--text-muted)'}20`,
+                border: `1px solid ${roleBadgeColor[user.role] || 'var(--text-muted)'}40`,
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                textTransform: 'capitalize',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: roleBadgeColor[user.role] || 'var(--text-muted)', display: 'inline-block' }} />
+                <span style={{ color: roleBadgeColor[user.role] || 'var(--text-muted)' }}>{user.role}</span>
+              </span>
+            </div>
+          </div>
+        )}
+        <div className="container" style={{ flex: 1 }}>
           <Outlet />
         </div>
       </main>
